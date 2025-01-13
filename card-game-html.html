@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>İki Oyunculu Kart Oyunu</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .game-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .player-scores {
+            display: flex;
+            justify-content: space-around;
+            margin: 10px 0;
+        }
+        .players-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .player-board {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .player-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .slots-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 30px;
+        }
+        .slot {
+            width: 60px;
+            height: 90px;
+            border: 2px dashed #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .slot-number {
+            position: absolute;
+            top: 5px;
+            font-size: 12px;
+        }
+        .card {
+            width: 56px;
+            height: 84px;
+            background-color: #3b82f6;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 4px;
+            user-select: none;
+        }
+        .card.placed {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .card-container {
+            display: flex;
+            gap: 8px;
+        }
+        .placed-card {
+            position: absolute;
+            width: 56px;
+            height: 84px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            border-radius: 4px;
+        }
+        .placed-card.correct {
+            background-color: #22c55e;
+        }
+        .placed-card.incorrect {
+            background-color: #ef4444;
+        }
+        .name-input {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .modal {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 32px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .winner {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .winner-text {
+            background-color: #22c55e;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="game">
+        <div id="nameInput" class="name-input">
+            <h1>Oyuncu İsimleri</h1>
+            <div class="input-group">
+                <label>1. Oyuncu:</label>
+                <input type="text" id="player1Name" placeholder="İsim giriniz">
+            </div>
+            <div class="input-group">
+                <label>2. Oyuncu:</label>
+                <input type="text" id="player2Name" placeholder="İsim giriniz">
+            </div>
+            <button id="startGame" disabled>Oyunu Başlat</button>
+        </div>
+    </div>
+
+    <script>
+        const calculatePoints = (n) => {
+            const pointsMap = {
+                0: 100,
+                1: 100,
+                2: 200,
+                3: 600,
+                4: 3600,
+                5: 13000
+            };
+            return pointsMap[n] || 0;
+        };
+
+        class Game {
+            constructor() {
+                this.gameState = 'names';
+                this.currentRound = 1;
+                this.player1Score = 0;
+                this.player2Score = 0;
+                this.player1Name = '';
+                this.player2Name = '';
+                this.roundComplete = { player1: false, player2: false };
+                this.setupNameInput();
+            }
+
+            setupNameInput() {
+                const player1Input = document.getElementById('player1Name');
+                const player2Input = document.getElementById('player2Name');
+                const startButton = document.getElementById('startGame');
+
+                const checkInputs = () => {
+                    startButton.disabled = !player1Input.value.trim() || !player2Input.value.trim();
+                };
+
+                player1Input.addEventListener('input', checkInputs);
+                player2Input.addEventListener('input', checkInputs);
+
+                startButton.addEventListener('click', () => {
+                    this.player1Name = player1Input.value.trim();
+                    this.player2Name = player2Input.value.trim();
+                    this.startGame();
+                });
+            }
+
+            startGame() {
+                this.gameState = 'playing';
+                document.getElementById('nameInput').remove();
+                this.renderGame();
+            }
+
+            renderGame() {
+                const gameContainer = document.getElementById('game');
+                gameContainer.innerHTML = `
+                    <div class="game-header">
+                        <h1>Raunt ${this.currentRound}/5</h1>
+                        <div class="player-scores">
+                            <div>${this.player1Name}: ${this.player1Score} puan</div>
+                            <div>${this.player2Name}: ${this.player2Score} puan</div>
+                        </div>
+                    </div>
+                    <div class="players-container">
+                        <div id="player1Board"></div>
+                        <div id="player2Board"></div>
+                    </div>
+                `;
+
+                new PlayerBoard(1, this.player1Name, this);
+                new PlayerBoard(2, this.player2Name, this);
+            }
+
+            handleRoundComplete(playerId, points) {
+                if (playerId === 1) {
+                    this.roundComplete.player1 = true;
+                    this.player1Score += points;
+                } else {
+                    this.roundComplete.player2 = true;
+                    this.player2Score += points;
+                }
+
+                if (this.roundComplete.player1 && this.roundComplete.player2) {
+                    if (this.currentRound < 5) {
+                        this.showNextRoundButton();
+                    } else {
+                        this.endGame();
+                    }
+                }
+            }
+
+            showNextRoundButton() {
+                const button = document.createElement('div');
+                button.innerHTML = `
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button id="nextRound">Sonraki Raunt</button>
+                    </div>
+                `;
+                document.getElementById('game').appendChild(button);
+                document.getElementById('nextRound').addEventListener('click', () => this.startNextRound());
+            }
+
+            startNextRound() {
+                this.currentRound++;
+                this.roundComplete = { player1: false, player2: false };
+                this.renderGame();
+            }
+
+            endGame() {
+                const winner = this.player1Score > this.player2Score ? this.player1Name :
+                             this.player2Score > this.player1Score ? this.player2Name : null;
+                
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <h2>Oyun Bitti!</h2>
+                        <p>${winner ? `${winner} Kazandı!` : 'Berabere!'}</p>
+                        <p>${this.player1Name}: ${this.player1Score} puan</p>
+                        <p>${this.player2Name}: ${this.player2Score} puan</p>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+        }
+
+        class PlayerBoard {
+            constructor(playerId, playerName, game) {
+                this.playerId = playerId;
+                this.playerName = playerName;
+                this.game = game;
+                this.cards = [];
+                this.slots = Array(8).fill(null);
+                this.greenCount = 0;
+                this.roundStarted = false;
+                this.nValue = null;
+                this.draggedCardIndex = null;
+
+                this.render();
+            }
+
+            render() {
+                const board = document.getElementById(`player${this.playerId}Board`);
+                if (!this.roundStarted) {
+                    board.innerHTML = `
+                        <div style="text-align: center; padding: 20px;">
+                            <h3>${this.playerName}: 0-5 arası bir sayı seçin:</h3>
+                            <input type="number" min="0" max="5" id="player${this.playerId}Input" style="margin: 10px;">
+                            <button id="player${this.playerId}Ready">Hazır</button>
+                        </div>
+                    `;
+                    this.setupInputHandlers();
+                    return;
+                }
+
+                board.innerHTML = `
+                    <div class="player-board">
+                        <div class="player-info">
+                            <div>
+                                <div class="text-lg font-bold">${this.playerName}</div>
+                                <div>Hedef Sayı: ${this.nValue}</div>
+                                <div>Puan: ${calculatePoints(this.nValue)}</div>
+                                <div>Yeşil Kart: ${this.greenCount}</div>
+                            </div>
+                        </div>
+                        <div class="slots-container">
+                            ${this.renderSlots()}
+                        </div>
+                        <div class="card-container">
+                            ${this.renderCards()}
+                        </div>
+                    </div>
+                `;
+
+                this.setupDragAndDrop();
+            }
+
+            renderSlots() {
+                return this.slots.map((value, index) => `
+                    <div class="slot" data-index="${index}">
+                        <div class="slot-number">${index + 1}</div>
+                        ${value !== null ? `
+                            <div class="placed-card ${value === index + 1 ? 'correct' : 'incorrect'}">
+                                ${value}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            }
+
+            renderCards() {
+                return this.cards.map((card, index) => `
+                    <div class="card ${card.isPlaced ? 'placed' : ''}"
+                         draggable="${!card.isPlaced}"
+                         data-index="${index}">
+                        ${card.isPlaced ? '' : '?'}
+                    </div>
+                `).join('');
+            }
+
+            setupInputHandlers() {
+                const input = document.getElementById(`player${this.playerId}Input`);
+                const button = document.getElementById(`player${this.playerId}Ready`);
+
+                input.addEventListener('input', (e) => {
+                    const value = parseInt(e.target.value);
+                    button.disabled = !(value >= 0 && value <= 5);
+                });
+
+                button.addEventListener('click', () => {
+                    this.nValue = parseInt(input.value);
+                    this.startRound();
+                });
+            }
+
+            startRound() {
+                this.roundStarted = true;
+                const numbers = Array.from({ length: 8 }, (_, i) => i + 1);
+                this.cards = numbers.sort(() => Math.random() - 0.5)
+                    .map(num => ({ id: num, value: num, isFlipped: false, isPlaced: false }));
+                this.render();
+            }
+
+            setupDragAndDrop() {
+                const cards = document.querySelectorAll(`#player${this.playerId}Board .card`);
+                const slots = document.querySelectorAll(`#player${this.playerId}Board .slot`);
+
+                cards.forEach(card => {
+                    if (!card.classList.contains('placed')) {
+                        card.addEventListener('dragstart', (e) => {
+                            this.draggedCardIndex = parseInt(card.dataset.index);
+                        });
+                    }
+                });
+
+                slots.forEach(slot => {
+                    slot.addEventListener('dragover', (e) => e.preventDefault());
+                    slot.addEventListener('drop', (e) => {
+                        const slotIndex = parseInt(slot.dataset.index);
+                        this.handleDrop(slotIndex);
+                    });
+                });
+            }
+
+            handleDrop(slotIndex) {
+                if (this.slots[slotIndex] !== null || this.draggedCardIndex === null) return;
+
+                const card = this.cards[this.draggedCardIndex];
+                if (card.isPlaced) return;
+
+                card.isFlipped = true;
+                card.isPlaced = true;
+                this.slots[slotIndex] = card.value;
+
+                this.greenCount = this.slots.filter((value, index) => value === index + 1).length;
+
+                if (this.slots.filter(slot => slot !== null).length === 8) {
+                    const points = this.greenCount === this.nValue ? calculatePoints(this.nValue) : 0;
+                    this.game.handleRoundComplete(this.playerId, points);
+                }
+
+                this.render();
+            }
+        }
+
+        // Start the game
+        new Game();
+    </script>
+</body>
+</html>
